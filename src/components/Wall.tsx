@@ -20,17 +20,8 @@ const BLANK_PNG =
   "Al21bKAAAABlBMVEUAAAD///+l2Z/dAAAACklEQVR4nGNgAAAAAgAB4iG8MwAAAABJRU5ErkJggg==";
 
 export default function Wall({ wall }: { wall: WallState }) {
-  const {
-    perfoDiameterMin,
-    perfoDiameterMax,
-    patternUrl,
-    blur,
-    invertPattern,
-    layoutOrientation,
-    returnLeg,
-    jointMin,
-    jointMax,
-  } = useUI();
+  const { perfoDiameterMin, perfoDiameterMax, patternUrl, blur, invertPattern,
+          layoutOrientation, returnLeg, jointMin, jointMax, perforate } = useUI();
   const { camera } = useThree();
 
   // 1) Load pattern image (or blank)
@@ -120,35 +111,36 @@ export default function Wall({ wall }: { wall: WallState }) {
   const cell   = 18;
   const wCells = layoutOrientation === "portrait" ? 1 : 2;
   const hCells = layoutOrientation === "portrait" ? 2 : 1;
-  const minGap = jointMin;  // e.g. 0.25"
-  const maxGap = jointMax;  // e.g. 3"
+// horizontal seam (between rows) is fixed 0.25"
+  const seamY = 0.25;  
+
+  // vertical seam (between columns) may grow 0.25" → 3"
+  const minGapX = jointMin;
+  const maxGapX = jointMax;
 
   // visible face dims
-  const panelW = cell * wCells - minGap;
-  const panelH = cell * hCells - minGap;
+  const panelW = cell * wCells - minGapX;   // subtract *vertical* min gap
+  const panelH = cell * hCells - seamY;     // subtract fixed horizontal gap
 
   // start with max panels that fit at minGap
-  let cols = Math.floor((wall.width + minGap) / (panelW + minGap)) || 1;
+  let cols = Math.floor((wall.width + minGapX) / (panelW + minGapX)) || 1;
   let gapX = (wall.width - cols * panelW) / (cols + 1);
-
-  // if gapX > maxGap, add a column and recompute
-  while (gapX > maxGap) {
+  while (gapX > maxGapX) {
     cols += 1;
     gapX = (wall.width - cols * panelW) / (cols + 1);
   }
-  gapX = Math.max(minGap, gapX);
+  gapX = Math.max(minGapX, gapX);
 
   // same for rows (you can clamp differently if you like)
-  let rows = Math.floor((wall.height + minGap) / (panelH + minGap)) || 1;
-  let gapY = (wall.height - rows * panelH) / (rows + 1);
-  gapY = Math.max(minGap, Math.min(maxGap, gapY));
+  const rows = Math.floor((wall.height + seamY) / (panelH + seamY)) || 1;
+  const gapY = seamY;                        // always constant
 
   // bottom-left start (half-face + one gap)
   const startX = -wall.width / 2 + gapX + panelW / 2 + wall.seamOffsetX;
   const startY = -wall.height / 2 + gapY + panelH / 2 + wall.seamOffsetY;
 
-  const geoW = panelW + returnLeg * 2;
-const geoH = panelH + returnLeg * 2;
+//   const geoW = panelW + returnLeg * 2;
+// const geoH = panelH + returnLeg * 2;
 
   // 6) Build panels
   const panels = [];
@@ -160,10 +152,11 @@ const geoH = panelH + returnLeg * 2;
         <Panel
             key={`${i}-${j}`}
             faceSize={{ w: panelW, h: panelH }}
-            geoSize={[geoW, geoH]}  
+            // geoSize={[geoW, geoH]}  
             wallSize={[wall.width, wall.height]}
             position={[x, y, 0]}
             returnLeg={returnLeg}
+            perforate={perforate}     // ← now reactive
             alphaMap={alphaMap}
         />
         );
@@ -171,7 +164,7 @@ const geoH = panelH + returnLeg * 2;
   }
 
   return (
-    <Bounds observe margin={1} fit clip>
+    <Bounds clip margin={1}>
       <ZoomController />
       {panels}
     </Bounds>

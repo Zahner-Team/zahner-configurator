@@ -61,7 +61,7 @@ export default function App() {
           <Sky sunPosition={[50, 100, -50]} turbidity={2} rayleigh={1} />
           {showEnvironment && <Environment preset="warehouse" resolution={512} />}
 
-          <Bounds observe margin={1} fit clip>
+          <Bounds clip margin={1}>
             {/* Zoom controller inside Bounds */}
             <ZoomController zoomAll={zoomAll} setZoomAll={setZoomAll} />
 

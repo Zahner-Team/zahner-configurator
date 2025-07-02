@@ -1,144 +1,137 @@
 // src/components/Panel.tsx
-import React, { useMemo } from "react";
+import  { useMemo } from "react";
 import {
   PlaneGeometry,
   MeshStandardMaterial,
   RepeatWrapping,
   Texture,
+  SRGBColorSpace,
 } from "three";
+import type { MeshStandardMaterialParameters } from "three";
 import { useTexture } from "@react-three/drei";
 import type { PanelSize } from "../store/useUI";
 import useUI from "../store/useUI";
-import generatePerforation from "../utils/generatePerforation";
 
 interface PanelProps {
-  faceSize: PanelSize;      // visible face dims (e.g. {w:17.75,h:35.75})
-  geoSize: [number, number]; // face + 2×returnLeg
-  wallSize: [number, number];
-  position: [number, number, number];
-  returnLeg: number;        // flange depth
+  faceSize : PanelSize;        // e.g. { w:17.75 , h:35.75 }
+  wallSize : [number, number]; // full wall dims
+  position : [number, number, number];
+  returnLeg: number;           // flange depth in inches
+  perforate: boolean;          // toggle perforation
+  alphaMap : Texture;          // wall-wide α-map
 }
 
 export default function Panel({
-  faceSize: { w: faceW, h: faceH },
-  geoSize: [geoW, geoH],
-  wallSize: [wallW, wallH],
+  faceSize : { w: faceW, h: faceH },
+  wallSize : [ wallW, wallH ],
   position,
   returnLeg,
-}: PanelProps): React.JSX.Element {
-  const { materialVariant } = useUI();
+  perforate,
+  alphaMap,
+}: PanelProps) {
 
-  // 1) PBR textures
-  const base = `/textures/${materialVariant}/`;
-  const isCu = materialVariant === "copper";
-  const urls = [
+  //---------------------------------------------------------------------------
+  // 1)  Load PBR set (Base-color, Normal, Roughness, Metalness [, AO])
+  //---------------------------------------------------------------------------
+  const { materialVariant } = useUI();
+  const base   = `/textures/${materialVariant}/`;
+  const isCu   = materialVariant === "copper";
+
+  const [
+    map,
+    normalMap,
+    roughnessMap,
+    metalnessMap,
+    maybeAO,
+  ] = useTexture([
     `${base}${isCu ? "Copper_PBR_BaseColor.jpg" : "Steel_Weathering_BaseColor.png"}`,
     `${base}${isCu ? "Copper_PBR_Normal.jpg"    : "Steel_Weathering_Normal.jpg"}`,
     `${base}${isCu ? "Copper_PBR_Roughness.jpg" : "Steel_Weathering_Roughness.jpg"}`,
     `${base}${isCu ? "Copper_PBR_Metalness.jpg" : "Steel_Weathering_Metalness.jpg"}`,
-  ];
-  const aoUrl = `${base}${isCu ? "Copper_PBR_AO.jpg" : "Steel_Weathering_AO.jpg"}`;
-  const [map, normalMap, roughnessMap, metalnessMap, maybeAO] =
-    useTexture([...urls, aoUrl]);
+    `${base}${isCu ? "Copper_PBR_AO.jpg"        : "Steel_Weathering_AO.jpg"}`,
+  ]);
 
-  // 2) Perforation maps: one tight‐grid for face, one coarser for flange
-  const faceAlpha = useMemo(
-    () =>
-      generatePerforation(
-        { w: faceW, h: faceH },
-        123,
-        faceW * 4,
-        faceW * 4,
-        1,
-        32
-      ),
-    [faceW, faceH]
-  );
-  const flangeAlpha = useMemo(
-    () =>
-      generatePerforation(
-        { w: geoW, h: geoH },
-        456,
-        returnLeg * 4,
-        returnLeg * 4,
-        1,
-        32
-      ),
-    [geoW, geoH, returnLeg]
-  );
+  // correct colour-spaces (three ≥ r152)
+  map.colorSpace = SRGBColorSpace;
 
-  // 3) UV tile & offset (so each panel picks its correct slice
-  const uRepeat = faceW / wallW;
-  const vRepeat = faceH / wallH;
-  const offsetX = (position[0] + wallW / 2 - returnLeg) / wallW - uRepeat / 2;
-  const offsetY = (position[1] + wallH / 2 - returnLeg) / wallH - vRepeat / 2;
+  //---------------------------------------------------------------------------
+  // 2)  Slice the global α-map so each panel shows its own region
+  //---------------------------------------------------------------------------
+  const faceAlpha = useMemo(() => {
+    if (!perforate) return undefined;
+    const tex = alphaMap.clone();
+    tex.wrapS = tex.wrapT = RepeatWrapping;
+    tex.repeat.set(faceW / wallW, faceH / wallH);
+    tex.offset.set(
+      (position[0] + wallW/2 - returnLeg)/wallW - tex.repeat.x/2,
+      (position[1] + wallH/2 - returnLeg)/wallH - tex.repeat.y/2
+    );
+    tex.needsUpdate = true;
+    return tex;
+  }, [perforate, alphaMap, faceW, faceH, wallW, wallH, position, returnLeg]);
 
-  // 4) Geometries
-  const faceGeo   = useMemo(() => new PlaneGeometry(faceW,       faceH),       [faceW, faceH]);
-  const topGeo    = useMemo(() => new PlaneGeometry(faceW,       returnLeg),  [faceW, returnLeg]);
-  const sideGeo   = useMemo(() => new PlaneGeometry(returnLeg,   faceH),       [returnLeg, faceH]);
 
-  // 5) Material factory
-  function makeMat(amap: Texture) {
-    amap.wrapS = amap.wrapT = RepeatWrapping;
-    amap.repeat.set(uRepeat, vRepeat);
-    amap.offset.set(offsetX, offsetY);
-
-    const m = new MeshStandardMaterial({
-      map,
-      normalMap,
-      roughnessMap,
-      metalnessMap,
-      alphaMap: amap,
-      transparent: false,
-      alphaTest: 0.5,
-    });
-    if (maybeAO && maybeAO.image.naturalWidth > 0) {
+  //---------------------------------------------------------------------------
+  // 3)  Material helpers
+  //---------------------------------------------------------------------------
+  const faceMat = useMemo(() => {
+    const params: MeshStandardMaterialParameters = {
+      map, normalMap, roughnessMap, metalnessMap,
+      metalness: 1, roughness: 0.5, envMapIntensity: 1,
+      side: 2,
+      transparent: Boolean(faceAlpha),
+      ...(faceAlpha
+        ? { alphaMap: faceAlpha, alphaTest: 0.4 }
+        : {}),
+    };
+    const m = new MeshStandardMaterial(params);
+    if (maybeAO?.image?.naturalWidth) {
       m.aoMap = maybeAO;
       m.aoMapIntensity = 1;
     }
     return m;
-  }
-  const faceMat   = useMemo(() => makeMat(faceAlpha),   [faceAlpha,   uRepeat, vRepeat, offsetX, offsetY]);
-  const flangeMat = useMemo(() => makeMat(flangeAlpha), [flangeAlpha, uRepeat, vRepeat, offsetX, offsetY]);
+  }, [map, normalMap, roughnessMap, metalnessMap, maybeAO, faceAlpha]);
 
-  // 6) Assemble face + four flanges
+  // 3.1) Flange material (always opaque)
+  const flangeMat = useMemo(() => {
+    const params: MeshStandardMaterialParameters = {
+      map, normalMap, roughnessMap, metalnessMap,
+      metalness: 1, roughness: 0.5, envMapIntensity: 1,
+      side: 2,
+      transparent: false,
+    };
+    const m = new MeshStandardMaterial(params);
+    if (maybeAO?.image?.naturalWidth) {
+      m.aoMap = maybeAO;
+      m.aoMapIntensity = 1;
+    }
+    return m;
+  }, [map, normalMap, roughnessMap, metalnessMap, maybeAO]);
+
+  //---------------------------------------------------------------------------
+  // 4)  Geometries
+  //---------------------------------------------------------------------------
+  const faceGeo = useMemo(() => new PlaneGeometry(faceW, faceH), [faceW, faceH]);
+  const topGeo  = useMemo(() => new PlaneGeometry(faceW, returnLeg), [faceW, returnLeg]);
+  const sideGeo = useMemo(() => new PlaneGeometry(returnLeg, faceH), [returnLeg, faceH]);
+
+  //---------------------------------------------------------------------------
+  // 5)  Assemble (front face + 4 legs pushed back by returnLeg/2 on −Z)
+  //---------------------------------------------------------------------------
+  const zShift = -returnLeg / 2;
+
   return (
     <group position={position}>
-      {/* Front face */}
+      {/* front sheet */}
       <mesh geometry={faceGeo} material={faceMat} />
 
-      {/* Top flange */}
-      <mesh
-        geometry={topGeo}
-        material={flangeMat}
-        position={[0, faceH/2 + returnLeg/2, 0]}
-        rotation={[Math.PI/2, 0, 0]}
-      />
+      {/* top & bottom */}
+      <mesh geometry={topGeo}  material={flangeMat} position={[0,  faceH/2, zShift]} rotation={[-Math.PI/2, 0, 0]} />
+      <mesh geometry={topGeo}  material={flangeMat} position={[0, -faceH/2, zShift]} rotation={[ Math.PI/2, 0, 0]} />
 
-      {/* Bottom flange */}
-      <mesh
-        geometry={topGeo}
-        material={flangeMat}
-        position={[0, -faceH/2 - returnLeg/2, 0]}
-        rotation={[-Math.PI/2, 0, 0]}
-      />
-
-      {/* Left flange */}
-      <mesh
-        geometry={sideGeo}
-        material={flangeMat}
-        position={[-faceW/2 - returnLeg/2, 0, 0]}
-        rotation={[0, Math.PI/2, 0]}
-      />
-
-      {/* Right flange */}
-      <mesh
-        geometry={sideGeo}
-        material={flangeMat}
-        position={[faceW/2 + returnLeg/2, 0, 0]}
-        rotation={[0, -Math.PI/2, 0]}
-      />
+      {/* left & right */}
+      <mesh geometry={sideGeo} material={flangeMat} position={[-faceW/2, 0, zShift]} rotation={[0,  Math.PI/2, 0]} />
+      <mesh geometry={sideGeo} material={flangeMat} position={[ faceW/2, 0, zShift]} rotation={[0, -Math.PI/2, 0]} />
     </group>
   );
 }

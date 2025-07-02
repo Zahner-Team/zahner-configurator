@@ -29,6 +29,9 @@ export interface Store {
  setPerfoDiameterMax: (v: number) => void
  setInvertPattern: (b: boolean) => void
 
+ perforate: boolean;
+  setPerforate: (b: boolean) => void;
+
   // scene toggles:
   showEnvironment: boolean;
   backgroundColor: string;
@@ -91,6 +94,9 @@ export default create<Store>((set) => ({
  setPerfoDiameterMax: v => set(() => ({ perfoDiameterMax: v })),
  setInvertPattern: b => set(() => ({ invertPattern: b })),
 
+ perforate: false,
+  setPerforate: (b) => set({ perforate: b }),
+
  backgroundVariant: "light",
   // …existing setters…
   setBackgroundVariant: (v) => set(() => ({ backgroundVariant: v })),
@@ -111,7 +117,7 @@ export default create<Store>((set) => ({
   setGroundColor: c         => set(() => ({ groundColor: c })),
 
   //image
-  patternUrl: "",       // start empty
+  patternUrl: "https://images.unsplash.com/photo-1533481644991-f01289782811?fm=jpg&q=60&w=3000&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8bW91bnRhaW5zY2FwZXxlbnwwfHwwfHx8MA%3D%3D",
   blur: 0,              // px of blur on the pattern
   setPatternUrl: (url) => set(() => ({ patternUrl: url })),
   setBlur: (b) => set(() => ({ blur: b })),
