@@ -1,0 +1,47 @@
+/* src/index.css */
+
+/* Fill the viewport, split into 2 rows: 1fr canvas, auto HUD */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+.app-grid {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  height: 100%;
+}
+/* Make the Canvas fill its grid cell */
+.three-canvas {
+  width: 100%;
+  height: 100%;
+  display: block; /* remove inline-block gaps */
+}
+/* HUD bar at the bottom */
+.hud-bar {
+  background: rgba(26, 29, 39, 0.8); /* semi-transparent panel */
+  padding: 8px;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+
+:root {
+  --bg: #10131a;        /* deep graphite */
+  --surface: #1a1d27;   /* panels/UI surfaces */
+  --accent: #1de9b6;    /* neon-teal */
+  --highlight: #f50057; /* magenta edge glow */
+  --text: #e0e0e0;      /* light gray */
+}
+
+body, html, #root {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Orbitron", sans-serif;
+}
+.glass {
+  background: rgba(26, 29, 39, 0.6);
+  border: 1px solid var(--accent);
+  backdrop-filter: blur(4px);
+  border-radius: 8px;
+  box-shadow: 0 0 12px var(--accent);
+}
