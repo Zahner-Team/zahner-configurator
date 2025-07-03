@@ -14,6 +14,7 @@ import Wall from "./components/Wall";
 import HUD from "./components/HUD";
 
 export default function App() {
+  const ui = useUI();                       // NEW  ← keep the whole store
   const {
     wall,
     showEnvironment,
@@ -21,7 +22,7 @@ export default function App() {
     showGround,
     zoomAll,
     setZoomAll,
-  } = useUI();
+  } = ui;  
 
   // margins in inches
   const sideMargin   = 12;
@@ -78,6 +79,9 @@ export default function App() {
             {/* Perforated panel wall */}
             <Wall wall={wall} />
           </Bounds>
+
+          {/* single copy of the grid editor – world-space so it tracks the wall exactly */}
+   
 
           {/* replace plain ground with a 1″ grid */}
           {showGround && (

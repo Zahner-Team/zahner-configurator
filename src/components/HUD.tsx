@@ -64,6 +64,20 @@ export default function HUD() {
           value:    ui.layoutOrientation,
           onChange: ui.setLayoutOrientation,
         },
+        "Width (in)": {
+           value   : ui.wallWidth,
+           min     : 36,
+           max     : 240,
+           step    : 1,
+           onChange: (v: number) => ui.setWall({ width: v }),
+         },
+         "Height (in)": {
+           value   : ui.wallHeight,
+           min     : 36,
+           max     : 240,
+           step    : 1,
+           onChange: (v: number) => ui.setWall({ height: v }),
+         },
         "Return-Leg (in)": {
           value:   ui.returnLeg,
           min:     0,
@@ -85,6 +99,7 @@ export default function HUD() {
           step:    0.25,
           onChange: ui.setJointMax,
         },
+        "Edit grid": { value: ui.editLayout, onChange: ui.setEditLayout },
       },
       { collapsed: true }
     ),
@@ -112,21 +127,10 @@ export default function HUD() {
 
   return (
     <div onWheel={stopWheel}>
+        
       <Leva collapsed theme={{ sizes: { rootWidth: "300px" } }} />
-      {ui.patternUrl && (
-        <div style={{ padding: 8, textAlign: "center" }}>
-          <div style={{ color: "#fff", marginBottom: 4 }}>Pattern Preview</div>
-          <img
-            src={ui.patternUrl}
-            alt="Pattern preview"
-            style={{
-              maxWidth:   "100%",
-              maxHeight:  120,
-              filter:     `blur(${ui.blur}px)`,
-            }}
-          />
-        </div>
-      )}
+      
+      
     </div>
     
   );
