@@ -171,7 +171,14 @@ export default create<Store>((set, get) => ({
   jointMax : 3,
   setLayoutOrientation: (o) => set({ layoutOrientation: o }),
   setReturnLeg        : (v) => set({ returnLeg: v }),
-  setJointMin         : (v) => set({ jointMin: v }),
+  setJointMin         : (v) => set((s) => { 
+    /** ──↓↓  DEBUG  ↓↓────────────────────────────────────────── */
+    console.log(
+      `%c[Zustand] setJointMax → ${v}`,
+      'color:#22d; font-weight:bold'
+    );
+   return { jointMin: v };
+ }),
   setJointMax         : (v) => set({ jointMax: v }),
 
   /* grid-editor */

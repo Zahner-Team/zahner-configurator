@@ -11,24 +11,46 @@ import GridLayoutEditor from "./GridLayoutEditor";
 import useUI   from "../store/useUI";
 import type { WallState } from "../store/useUI";
 
-/* ------------------------------------------------------------------ */
-/* Helper – choose #columns (or #rows) so the vertical joint ends up  */
-/* within the user’s [min,max] sliders.                               */
-/* ------------------------------------------------------------------ */
-function bestFit(countMin: number,          // starting guess (cols or rows)
-                 wall: number,              // total inches in that direction
-                 cell: number,              // 18″ module
-                 jointMin: number,
-                 jointMax: number) {
-  let n = Math.max(1, countMin);
-  while (true) {
+/**
+ * Choose an integer panel count (n) so that the resulting vertical-joint
+ * width falls inside [min, max].  If there is no perfect fit, return the
+ * closest one **below max** (or clamp to min).
+ *
+ *   joint = (wall – n·cell) / (n + 1)
+ */
+function bestFit(
+  wall    : number,   // overall inches
+  cell    : number,   // 18″ module
+  jointMin: number,
+  jointMax: number
+) {
+  let bestN      = 1;
+  let bestJoint  = (wall - cell) / 2;      // n = 1
+  let smallestErr = Math.abs(bestJoint - jointMax);
+
+  // reasonable search range: 1 … wall/cell  (anything higher is negative)
+  const maxN = Math.max(1, Math.floor(wall / cell));
+
+  for (let n = 1; n <= maxN; n++) {
     const joint = (wall - n * cell) / (n + 1);
-    if (joint <= jointMax && joint >= jointMin) return { n, joint };
-    // joint too big → add a column   joint too small → remove one
-    joint > jointMax ? (n += 1) : (n -= 1);
-    if (n < 1) return { n: 1, joint: jointMin };
+
+    // perfect hit – we're done
+    if (joint >= jointMin && joint <= jointMax) return { n, joint };
+
+    // otherwise remember the candidate that’s *just* under max
+    if (joint < jointMax) {
+      const err = jointMax - joint;        // how far under?
+      if (err < smallestErr) {
+        smallestErr = err;
+        bestN       = n;
+        bestJoint   = Math.max(joint, jointMin);  // never below min
+      }
+    }
   }
+
+  return { n: bestN, joint: bestJoint };
 }
+
 
 /**
  * Html scales in “world-units → CSS-px”.
@@ -90,6 +112,7 @@ export default function Wall({ wall }: { wall: WallState }) {
 
   /* simple LOD bump */
   useFrame(() => {
+     const t0 = performance.now();  
     const raw = MathUtils.clamp(
       10 / camera.position.distanceTo(new Vector3(0, 0, 0)),
       0.5, 4
@@ -115,12 +138,9 @@ export default function Wall({ wall }: { wall: WallState }) {
     const CELL = 18;
     /* columns (X) ------------------------------------------------------ */
     const { n: cols, joint: vJoint } = bestFit(
-      Math.floor(ui.wallWidth / CELL),       // seed
-      ui.wallWidth,
-      CELL,
-      ui.jointMin,
-      ui.jointMax
-    );
+  ui.wallWidth, 18, ui.jointMin, ui.jointMax
+);
+
     const strideX = CELL + vJoint;           // panel + vertical reveal
     
     /* rows (Y) – same idea but joint is always 0 .25” ------------------ */

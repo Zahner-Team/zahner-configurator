@@ -33,6 +33,12 @@ export default function GridLayoutEditor({
   const remainder = wallW - cols * cell;
   const vJoint    =
     remainder === 0 ? 0 : Math.min(ui.jointMax, remainder / (cols + 1));
+  /* ── DEBUG ──────────────────────────────────────────────── */
+  if (!Number.isFinite(vJoint)) {
+    console.warn('[GridLayoutEditor] vJoint non-finite!',
+                { remainder, cols, jointMax: ui.jointMax, vJoint });
+  }
+  /* ───────────────────────────────────────────────────────── */
 
   /* ------------- SAFETY BELT -------------- */
   if (cols === 0 || rows === 0 || vJoint < 0.01) return null;
@@ -53,7 +59,8 @@ export default function GridLayoutEditor({
   const [hoverCol, setHoverCol] = useState<number | null>(null);
 
   /* ------------------ helpers ------------------ */
-  const persist = (state: Record<string, PanelCell>) =>
+  const persist = (state: Record<string, PanelCell>) => {
+    performance.mark('layout-start');
     ui.setLayoutMatrix(
       Array.from({ length: rows }).map((_, rr) =>
         Array.from({ length: cols }).map((_, cc) => {
@@ -68,6 +75,12 @@ export default function GridLayoutEditor({
         })
       )
     );
+    
+  performance.mark('layout-end');
+  performance.measure('layout-matrix-ms', 'layout-start', 'layout-end');
+  const m = performance.getEntriesByName('layout-matrix-ms').pop();
+  console.log(`[GridLayoutEditor] layoutMatrix rebuild ${m?.duration.toFixed(1)} ms`);
+  }
 
   /* join / split column */
   const toggleCol = useCallback(
