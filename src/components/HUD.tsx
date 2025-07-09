@@ -6,15 +6,15 @@ import useUI from "../store/useUI";
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-const DEBOUNCE_MS = 150;
+const DEBOUNCE_MS = 50;
 
 /** Debounce + shallow-equality guard so we don’t spam the store */
-function debouncedSetter<T extends number>(
+function debouncedSetter(
   current: () => number,
-  setter: (v: number) => void
+  setter : (v: number) => void
 ) {
   return debounce((v: number) => {
-    if (Math.abs(v - current()) < 0.01) return; // (≈  ^0.25  slider step)
+    if (Math.abs(v - current()) < 0.01) return;     // ignore no-ops
     setter(v);
   }, DEBOUNCE_MS);
 }
@@ -56,54 +56,56 @@ export default function HUD() {
     ),
   });
 
-  /* heavy controls – update only on drag-end ------------------------- */
+  /* heavy controls – debounced while dragging ------------------------ */
   useControls({
     Layout: folder(
       {
         Orientation: {
-          options: { Portrait: "portrait", Landscape: "landscape" },
-          value: ui.layoutOrientation,
-          /* live change is cheap */
-          onChange: ui.setLayoutOrientation,
+          options : { Portrait: "portrait", Landscape: "landscape" },
+          value   : ui.layoutOrientation,
+          onChange: ui.setLayoutOrientation,          // cheap, keep live
         },
 
+        /* wall size – debounced onChange (no onEditEnd any more) */
         "Width (in)": {
-          value: ui.wallWidth,
-          min: 36,
-          max: 240,
-          step: 1,
-          /** update only when user lets go */
-          onEditEnd: (v: number) => ui.setWall({ width: v }),
+          value   : ui.wallWidth,
+          min     : 36,
+          max     : 240,
+          step    : 1,
+          onChange: debouncedSetter(() => ui.wallWidth,
+                                    v => ui.setWall({ width: v })),
         },
         "Height (in)": {
-          value: ui.wallHeight,
-          min: 36,
-          max: 240,
-          step: 1,
-          onEditEnd: (v: number) => ui.setWall({ height: v }),
+          value   : ui.wallHeight,
+          min     : 36,
+          max     : 240,
+          step    : 1,
+          onChange: debouncedSetter(() => ui.wallHeight,
+                                    v => ui.setWall({ height: v })),
         },
 
+        /* return-leg – also debounced */
         "Return-Leg (in)": {
-          value: ui.returnLeg,
-          min: 0,
-          max: 6,
-          step: 1,
-          onEditEnd: (v: number) => ui.setReturnLeg(v),
+          value   : ui.returnLeg,
+          min     : 0,
+          max     : 6,
+          step    : 1,
+          onChange: debouncedSetter(() => ui.returnLeg, ui.setReturnLeg),
         },
 
-        /* vertical gap - debounced so it never hammers the scene */
+        /* vertical gaps (already debounced) */
         "Vert Gap Min": {
-          value: ui.jointMin,
-          min: 0.25,
-          max: 1,
-          step: 0.01,
+          value   : ui.jointMin,
+          min     : 0.25,
+          max     : 1,
+          step    : 0.01,
           onChange: debouncedSetter(() => ui.jointMin, ui.setJointMin),
         },
         "Vert Gap Max": {
-          value: ui.jointMax,
-          min: 1,
-          max: 3,
-          step: 0.25,
+          value   : ui.jointMax,
+          min     : 1,
+          max     : 3,
+          step    : 0.25,
           onChange: debouncedSetter(() => ui.jointMax, ui.setJointMax),
         },
 
