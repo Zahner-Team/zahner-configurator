@@ -17,6 +17,10 @@ export interface WallState {
 }
 export type Seam = { kind: "v" | "h"; idx: number } | null;
 
+/* ───────── add this helper so comparisons stay easy ───────── */
+export const sameSeam = (a: Seam, b: Seam) =>
+  a?.kind === b?.kind && a?.idx === b?.idx;
+
 /* naïve filler --------------------------------------------------- */
 function packPanels (wallW: number, wallH: number, cell = 18): PanelBlock[] {
   const out: PanelBlock[] = [];
@@ -44,6 +48,11 @@ interface Store {
   /* seams */
   hoverSeam: Seam;
   setHoverSeam: (s: Seam) => void;
+
+  /** NEW – currently picked seam (single-select) */
+  selectedSeam   : Seam;
+  setSelectedSeam: (s: Seam) => void;
+
   toggleSeam: (s: { kind: "v" | "h"; idx: number }) => void;
 
   /* layout */
@@ -110,6 +119,12 @@ const useUI = create<Store>((set, get) => ({
 
   /* seams --------------------------------------------------------- */
   hoverSeam: null,
+  /* NEW -------------------------------------------------------- */
+  selectedSeam: null,
+  setSelectedSeam: s => {
+    // click on the same seam again → deselect
+    set(state => ({ selectedSeam: sameSeam(state.selectedSeam, s) ? null : s }));
+  },
   setHoverSeam: s => set({ hoverSeam: s }),
   toggleSeam: ({ kind, idx }) =>
     set(state => ({
@@ -126,6 +141,7 @@ const useUI = create<Store>((set, get) => ({
         };
       }),
     })),
+
 
   /* layout / grid ------------------------------------------------- */
   layoutBlocks: packPanels(144, 108),

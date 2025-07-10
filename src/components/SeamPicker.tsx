@@ -10,6 +10,8 @@ import {
 } from "../constants/layout";
 import { worldToScreen } from "../utils/projection";
 
+import { sameSeam } from "../store/useUI";   // ✨
+
 interface Props {
   wallW: number;
   wallH: number;
@@ -17,7 +19,7 @@ interface Props {
 
 export default function SeamPicker({ wallW, wallH }: Props) {
   const { camera, size, gl } = useThree();
-  const { setHoverSeam, editGrid } = useUI();
+  const { setHoverSeam, setSelectedSeam, editGrid } = useUI();   // ✨
 
   /* rebuild edge list whenever dims or editGrid change ------------ */
   useEffect(() => {
@@ -57,6 +59,7 @@ export default function SeamPicker({ wallW, wallH }: Props) {
       });
     }
 
+    /* ── handlers ─────────────────────────────────────────────── */
     const handleMove = (e: PointerEvent) => {
       let best: Edge | undefined;
       let bestDist = PICK_RADIUS_PX + 1;
@@ -79,8 +82,35 @@ export default function SeamPicker({ wallW, wallH }: Props) {
       );
     };
 
-    gl.domElement.addEventListener("pointermove", handleMove);
-    return () => gl.domElement.removeEventListener("pointermove", handleMove);
+    const handleClick = (e: PointerEvent) => {
+    if (!editGrid) return;
+
+    let best: Edge | undefined;
+    let bestDist = PICK_RADIUS_PX + 1;
+
+    edges.forEach(edge => {
+      const s1 = worldToScreen(edge.p1, camera, size);
+      const s2 = worldToScreen(edge.p2, camera, size);
+      const d  = distPointSegment(e.clientX,e.clientY, s1.x,s1.y,s2.x,s2.y);
+      if (d < bestDist) { best = edge; bestDist = d; }
+    });
+
+    if (best && bestDist <= PICK_RADIUS_PX) {
+      console.log("[Picker] clicked seam", best.kind, best.idx);
+      setSelectedSeam({ kind: best.kind, idx: best.idx });
+    }
+  };
+
+    if (!editGrid) return;
+      gl.domElement.addEventListener("pointermove", handleMove);
+      gl.domElement.addEventListener("pointerdown", handleClick);   // ✨
+    return () => {
+      gl.domElement.removeEventListener("pointermove", handleMove);
+      gl.domElement.removeEventListener("pointerdown", handleClick); // ✨
+    };
+
+    // gl.domElement.addEventListener("pointermove", handleMove);
+    // return () => gl.domElement.removeEventListener("pointermove", handleMove);
   }, [editGrid, wallW, wallH, camera, size, gl, setHoverSeam]);
 
   return null;
