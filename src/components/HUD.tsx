@@ -1,44 +1,34 @@
+/* src/components/HUD.tsx */
 import { Leva, useControls, folder, button } from "leva";
 import debounce from "lodash.debounce";
 import useUI from "../store/useUI";
 
 /* ------------------------------------------------------------------ */
-/* Helpers                                                             */
+/* helpers                                                             */
 /* ------------------------------------------------------------------ */
 
 const DEBOUNCE_MS = 50;
 
-/** Debounce + shallow-equality guard so we don’t spam the store */
-function debouncedSetter(
-  current: () => number,
-  setter : (v: number) => void
-) {
-  return debounce((v: number) => {
-    if (Math.abs(v - current()) < 0.01) return;     // ignore no-ops
+/** one-liner: debounce + ignore no-ops (keeps React snappy) */
+const debouncedSetter = (current: () => number, setter: (v: number) => void) =>
+  debounce((v: number) => {
+    if (Math.abs(v - current()) < 0.01) return;   // ignore when unchanged
     setter(v);
   }, DEBOUNCE_MS);
-}
 
 /* ------------------------------------------------------------------ */
-/* Component                                                           */
+/* HUD                                                                 */
 /* ------------------------------------------------------------------ */
-
 export default function HUD() {
   const ui = useUI();
 
-  /* cheap controls we can update live -------------------------------- */
+  /* LIGHT-WEIGHT CONTROLS (commit immediately) ---------------------- */
   useControls({
     Scene: folder(
       {
-        "Use HDRI": {
-          value: ui.showEnvironment,
-          onChange: ui.setShowEnvironment,
-        },
-        "Sky Color": {
-          value: ui.backgroundColor,
-          onChange: ui.setBackgroundColor,
-        },
-        ZoomAll: button(() => ui.setZoomAll(true)),
+        "Use HDRI":  { value: ui.showEnvironment, onChange: ui.setShowEnvironment },
+        "Sky Color": { value: ui.backgroundColor, onChange: ui.setBackgroundColor },
+        ZoomAll:     button(() => ui.setZoomAll(true)),
       },
       { collapsed: false }
     ),
@@ -56,7 +46,7 @@ export default function HUD() {
     ),
   });
 
-  /* heavy controls – debounced while dragging ------------------------ */
+  /* HEAVY/EXPENSIVE CONTROLS (debounced while dragging) ------------- */
   useControls({
     Layout: folder(
       {
@@ -66,49 +56,33 @@ export default function HUD() {
           onChange: ui.setLayoutOrientation,          // cheap, keep live
         },
 
-        /* wall size – debounced onChange (no onEditEnd any more) */
+        /* WALL SIZE */
         "Width (in)": {
-          value   : ui.wallWidth,
-          min     : 36,
-          max     : 240,
-          step    : 1,
-          onChange: debouncedSetter(() => ui.wallWidth,
-                                    v => ui.setWall({ width: v })),
+          value: ui.wallWidth,  min: 36, max: 240, step: 1,
+          onChange: debouncedSetter(() => ui.wallWidth,  v => ui.setWall({ width: v })),
         },
         "Height (in)": {
-          value   : ui.wallHeight,
-          min     : 36,
-          max     : 240,
-          step    : 1,
-          onChange: debouncedSetter(() => ui.wallHeight,
-                                    v => ui.setWall({ height: v })),
+          value: ui.wallHeight, min: 36, max: 240, step: 1,
+          onChange: debouncedSetter(() => ui.wallHeight, v => ui.setWall({ height: v })),
         },
 
-        /* return-leg – also debounced */
+        /* RETURN LEG */
         "Return-Leg (in)": {
-          value   : ui.returnLeg,
-          min     : 0,
-          max     : 6,
-          step    : 1,
+          value: ui.returnLeg, min: 0, max: 6, step: 1,
           onChange: debouncedSetter(() => ui.returnLeg, ui.setReturnLeg),
         },
 
-        /* vertical gaps (already debounced) */
+        /* VERTICAL GAPS */
         "Vert Gap Min": {
-          value   : ui.jointMin,
-          min     : 0.25,
-          max     : 1,
-          step    : 0.01,
+          value: ui.jointMin,  min: 0.25, max: 1, step: 0.01,
           onChange: debouncedSetter(() => ui.jointMin, ui.setJointMin),
         },
         "Vert Gap Max": {
-          value   : ui.jointMax,
-          min     : 1,
-          max     : 3,
-          step    : 0.25,
+          value: ui.jointMax,  min: 1, max: 3, step: 0.25,
           onChange: debouncedSetter(() => ui.jointMax, ui.setJointMax),
         },
 
+        /* TOGGLE EDITOR */
         "Edit grid": { value: ui.editLayout, onChange: ui.setEditLayout },
       },
       { collapsed: true }
@@ -118,10 +92,7 @@ export default function HUD() {
       {
         "Image URL": { value: ui.patternUrl, onChange: ui.setPatternUrl },
         Blur: {
-          value: ui.blur,
-          min: 0,
-          max: 2,
-          step: 0.1,
+          value: ui.blur, min: 0, max: 2, step: 0.1,
           onChange: debounce(ui.setBlur, DEBOUNCE_MS),
         },
         Invert: { value: ui.invertPattern, onChange: ui.setInvertPattern },
@@ -141,11 +112,9 @@ export default function HUD() {
     ),
   });
 
-  /* swallow wheel so Leva’s scroll doesn’t zoom Three-JS ------------- */
-  const stopWheel = (e: React.WheelEvent) => e.stopPropagation();
-
+  /* stop Leva’s wheel from zooming the scene ------------------------ */
   return (
-    <div onWheel={stopWheel}>
+    <div onWheel={e => e.stopPropagation()}>
       <Leva collapsed theme={{ sizes: { rootWidth: "300px" } }} />
     </div>
   );
