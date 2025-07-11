@@ -1,9 +1,8 @@
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { create } from "zustand";
 
-/* ───────────── shared literal types ───────────── */
-type SpanW = 1 | 2 | 3 | 4;
-type SpanH = 1 | 2 | 3 | 4 | 5;          // portrait panels may reach 5
+/* ───────────── literal unions ───────────── */
+type Span = 1 | 2 | 3 | 4 | 5;
 
 /* ───────────── domain models ───────────── */
 export interface PanelSize { w: number; h: number }
@@ -11,7 +10,7 @@ export interface PanelSize { w: number; h: number }
 export interface PanelBlock {
   id: string;
   origin: { col: number; row: number };
-  span: { w: SpanW; h: SpanH };
+  span  : { w: Span; h: Span };
   lockedJoints: { v: number[]; h: number[] };
 }
 
@@ -19,16 +18,14 @@ export interface WallState {
   width: number;  height: number;
   seamOffsetX: number; seamOffsetY: number;
   patternSeed: number;
-  panelSize: PanelSize;
 }
 
-/* ───── drag-and-drop info ───── */
 export interface DragInfo {
-  span: { w: 1; h: Exclude<SpanH, 1> };     // always 1×(2-5)
+  span: { w: Span; h: Span };
   cell: { col: number; row: number } | null;
 }
 
-/* ───── helper: seed wall with 1×2 panels ───── */
+/* ───── starter helper ───── */
 function packPanels(w: number, h: number, cell = 18): PanelBlock[] {
   const out: PanelBlock[] = [];
   const cols = Math.floor(w / cell);
@@ -47,49 +44,57 @@ function packPanels(w: number, h: number, cell = 18): PanelBlock[] {
 
 /* ───────────── Zustand store types ───────────── */
 interface Store {
+  /* wall + layout */
   wall: WallState;
   wallWidth: number; wallHeight: number;
   setWall: (p: Partial<WallState>) => void;
-
   layoutBlocks: PanelBlock[];
   setLayoutBlocks: (b: PanelBlock[]) => void;
 
+  /* drag-and-drop */
   dragging: DragInfo | null;
-  startDrag: (spanH: Exclude<SpanH, 1>) => void;
+  startDrag: (span: { w: Span; h: Span }) => void;
   updateDragCell: (cell: { col: number; row: number } | null) => void;
   cancelDrag: () => void;
   commitDrag: () => void;
 
+  /* selection / combine */
   selectedIds: string[];
   toggleSelect: (id: string, multi: boolean) => void;
   clearSelection: () => void;
   combineSelected: () => void;
 
-  /* — other UI prefs (unchanged signatures) — */
+  /* —— UI prefs (needed by HUD/App/Wall) —— */
+  showEnvironment: boolean;
+  setShowEnvironment: (b: boolean) => void;
+  backgroundColor: string;
+  setBackgroundColor: (c: string) => void;
+  showGround: boolean;
+  setShowGround: (b: boolean) => void;
+  groundColor: string;
+  setGroundColor: (c: string) => void;
+  backgroundVariant: "dark" | "light";
+  setBackgroundVariant: (v: "dark" | "light") => void;
+  zoomAll: boolean;
+  setZoomAll: (b: boolean) => void;
+
   materialVariant: "weatheringSteel" | "copper";
   setMaterialVariant: (v: "weatheringSteel" | "copper") => void;
+  perforate: boolean;
+  setPerforate: (b: boolean) => void;
+
   perfoDiameterMin: number; perfoDiameterMax: number;
-  invertPattern: boolean; perforate: boolean;
   setPerfoDiameterMin: (v: number) => void;
   setPerfoDiameterMax: (v: number) => void;
-  setInvertPattern: (b: boolean) => void;
-  setPerforate: (b: boolean) => void;
-  showEnvironment: boolean; backgroundColor: string;
-  showGround: boolean;      groundColor: string;
-  backgroundVariant: "dark" | "light";
-  zoomAll: boolean;
-  setShowEnvironment: (b: boolean) => void;
-  setBackgroundColor: (c: string) => void;
-  setShowGround: (b: boolean) => void;
-  setGroundColor: (c: string) => void;
-  setBackgroundVariant: (v: "dark" | "light") => void;
-  setZoomAll: (v: boolean) => void;
-  patternUrl: string; blur: number;
+
+  patternUrl: string; blur: number; invertPattern: boolean;
   setPatternUrl: (u: string) => void;
   setBlur: (v: number) => void;
+  setInvertPattern: (b: boolean) => void;
+
   layoutOrientation: "portrait" | "landscape";
-  returnLeg: number; jointMin: number; jointMax: number;
   setLayoutOrientation: (o: "portrait" | "landscape") => void;
+  returnLeg: number; jointMin: number; jointMax: number;
   setReturnLeg: (v: number) => void;
   setJointMin: (v: number) => void;
   setJointMax: (v: number) => void;
@@ -97,38 +102,30 @@ interface Store {
 
 /* ───────────── Zustand implementation ───────────── */
 const useUI = create<Store>((set, get) => ({
-  /* ------------- wall ------------- */
-  wall: {
-    width: 144, height: 108,
-    seamOffsetX: 0, seamOffsetY: 0,
-    patternSeed: 42,
-    panelSize: { w: 18, h: 36 },
-  },
+  /* wall -------------------------------------------------------- */
+  wall: { width: 144, height: 108, seamOffsetX: 0, seamOffsetY: 0, patternSeed: 42 },
   wallWidth: 144,
   wallHeight: 108,
   setWall: (p) => {
-    const w = Math.max(36, Math.min(288, p.width  ?? get().wall.width));
-    const h = Math.max(36, Math.min(288, p.height ?? get().wall.height));
+    const w = Math.max(36, Math.min(288, p.width  ?? get().wallWidth));
+    const h = Math.max(36, Math.min(288, p.height ?? get().wallHeight));
     set({
-      wall: { ...get().wall, width: w, height: h, ...p },
       wallWidth: w,
       wallHeight: h,
+      wall: { ...get().wall, ...p, width: w, height: h },
       layoutBlocks: packPanels(w, h),
     });
   },
 
-  /* ---------- panel layout -------- */
+  /* layout ------------------------------------------------------- */
   layoutBlocks: packPanels(144, 108),
   setLayoutBlocks: (b) => set({ layoutBlocks: b }),
 
-  /* ------------- drag ------------- */
+  /* drag-and-drop ----------------------------------------------- */
   dragging: null,
-  startDrag: (spanH) =>
-    set({ dragging: { span: { w: 1, h: spanH }, cell: null } }),
-
+  startDrag: (span) => set({ dragging: { span, cell: null } }),
   updateDragCell: (cell) =>
     set((s) => (s.dragging ? { dragging: { ...s.dragging, cell } } : {})),
-
   cancelDrag: () => set({ dragging: null }),
 
   commitDrag: () => {
@@ -136,76 +133,66 @@ const useUI = create<Store>((set, get) => ({
     if (!d?.cell) return set({ dragging: null });
 
     const { col, row } = d.cell;
-    const h = d.span.h;
-    const w: 1 = 1;
+    const { w, h }     = d.span;
+    const x1 = col + w;
+    const y1 = row + h;
 
-    const overlaps = get().layoutBlocks.some((b) => {
+    /* intersecting blocks */
+    const intersecting = get().layoutBlocks.filter((b) => {
       const bx1 = b.origin.col + b.span.w;
       const by1 = b.origin.row + b.span.h;
-      const dx1 = col + w;
-      const dy1 = row + h;
-      return !(dx1 <= b.origin.col || col >= bx1 || dy1 <= b.origin.row || row >= by1);
+      return !(x1 <= b.origin.col || col >= bx1 || y1 <= b.origin.row || row >= by1);
     });
-    if (overlaps) return set({ dragging: null });
+
+    const survivors = intersecting.filter((b) =>
+      !(b.origin.col >= col && b.origin.row >= row &&
+        b.origin.col + b.span.w <= x1 && b.origin.row + b.span.h <= y1)
+    );
 
     const newBlock: PanelBlock = {
       id: crypto.randomUUID(),
       origin: { col, row },
       span : { w, h },
-      lockedJoints: {
-        v: [col, col + 1],
-        h: Array.from({ length: h + 1 }, (_, i) => row + i),
-      },
+      lockedJoints: { v: [], h: [] },
     };
 
     set((s) => ({
       dragging: null,
-      layoutBlocks: [...s.layoutBlocks, newBlock],
+      layoutBlocks: [
+        ...s.layoutBlocks.filter((b) => !intersecting.includes(b)),
+        ...survivors,
+        newBlock,
+      ],
     }));
   },
 
-  /* --------- selection --------- */
+  /* selection / combine ----------------------------------------- */
   selectedIds: [],
   toggleSelect: (id, multi) =>
     set((s) => {
       const base = multi ? [...s.selectedIds] : [];
-      return {
-        selectedIds: base.includes(id)
-          ? base.filter((x) => x !== id)
-          : [...base, id],
-      };
+      return { selectedIds: base.includes(id) ? base.filter((x) => x !== id) : [...base, id] };
     }),
   clearSelection: () => set({ selectedIds: [] }),
 
-  /* ---------- combine (vertical) ---------- */
   combineSelected: () => {
     const { selectedIds, layoutBlocks } = get();
     if (selectedIds.length < 2) return;
-
+    /* simple vertical combine of same-col 1-wide blocks */
     const blocks = layoutBlocks.filter((b) => selectedIds.includes(b.id));
-    const col    = blocks[0].origin.col;
-
-    const sameCol1Wide = blocks.every(
-      (b) => b.origin.col === col && b.span.w === 1
-    );
+    const col = blocks[0].origin.col;
+    const sameCol1Wide = blocks.every((b) => b.origin.col === col && b.span.w === 1);
     if (!sameCol1Wide) return;
-
     const rows = blocks.map((b) => b.origin.row).sort((a, b) => a - b);
-    const contiguous = rows.every((r, i) =>
-      i === 0 ? true : r === rows[i - 1] + 2
-    );
+    const contiguous = rows.every((r, i) => i === 0 || r === rows[i - 1] + 2);
     if (!contiguous) return;
-
-    /* sum heights with proper typing ------------------ */
-    const totalH = blocks.reduce<number>((sum, b) => sum + b.span.h, 0) as SpanH;
-
+    const totalH = rows.length * blocks[0].span.h as Span;
     const newBlock: PanelBlock = {
       id: crypto.randomUUID(),
-      origin: { col, row: Math.min(...rows) },
-      span : { w: 1, h: totalH },
+      origin: { col, row: rows[0] },
+      span: { w: 1, h: totalH },
       lockedJoints: { v: [], h: [] },
     };
-
     set({
       layoutBlocks: [
         ...layoutBlocks.filter((b) => !selectedIds.includes(b.id)),
@@ -215,43 +202,47 @@ const useUI = create<Store>((set, get) => ({
     });
   },
 
-  /* ------------- other UI prefs (unchanged bodies) ------------- */
+  /* UI prefs (default values + setters) ------------------------- */
+  showEnvironment: true,
+  setShowEnvironment: (b) => set({ showEnvironment: b }),
+  backgroundColor: "#ffffff",
+  setBackgroundColor: (c) => set({ backgroundColor: c }),
+  showGround: true,
+  setShowGround: (b) => set({ showGround: b }),
+  groundColor: "#dddddd",
+  setGroundColor: (c) => set({ groundColor: c }),
+  backgroundVariant: "light",
+  setBackgroundVariant: (v) => set({ backgroundVariant: v }),
+  zoomAll: false,
+  setZoomAll: (b) => set({ zoomAll: b }),
+
   materialVariant: "weatheringSteel",
   setMaterialVariant: (v) => set({ materialVariant: v }),
-  perfoDiameterMin: 0.0625, perfoDiameterMax: 0.5,
-  invertPattern: false, perforate: false,
+  perforate: false,
+  setPerforate: (b) => set({ perforate: b }),
+
+  perfoDiameterMin: 0.0625,
+  perfoDiameterMax: 0.5,
   setPerfoDiameterMin: (v) => set({ perfoDiameterMin: v }),
   setPerfoDiameterMax: (v) => set({ perfoDiameterMax: v }),
-  setInvertPattern : (b) => set({ invertPattern : b }),
-  setPerforate     : (b) => set({ perforate     : b }),
-  showEnvironment: true, backgroundColor: "#ffffff",
-  showGround: true,      groundColor: "#dddddd",
-  backgroundVariant: "light", zoomAll: false,
-  setShowEnvironment : (b) => set({ showEnvironment : b }),
-  setBackgroundColor : (c) => set({ backgroundColor : c }),
-  setShowGround      : (b) => set({ showGround      : b }),
-  setGroundColor     : (c) => set({ groundColor     : c }),
-  setBackgroundVariant: (v) => set({ backgroundVariant: v }),
-  setZoomAll: (v) => set({ zoomAll: v }),
-  patternUrl:
-    "https://images.unsplash.com/photo-1533481644991-f01289782811?fm=jpg&q=60&w=3000",
+
+  patternUrl: "",
   blur: 0,
+  invertPattern: false,
   setPatternUrl: (u) => set({ patternUrl: u }),
-  setBlur      : (v) => set({ blur: v }),
+  setBlur: (v) => set({ blur: v }),
+  setInvertPattern: (b) => set({ invertPattern: b }),
+
   layoutOrientation: "portrait",
-  returnLeg: 2,
-  jointMin: 0.25,
-  jointMax: 3,
   setLayoutOrientation: (o) => set({ layoutOrientation: o }),
-  setReturnLeg       : (v) => set({ returnLeg: v }),
-  setJointMin        : (v) => set({ jointMin : v }),
-  setJointMax        : (v) => set({ jointMax : v }),
+  returnLeg: 2,
+  setReturnLeg: (v) => set({ returnLeg: v }),
+  jointMin: 0.25,
+  setJointMin: (v) => set({ jointMin: v }),
+  jointMax: 3,
+  setJointMax: (v) => set({ jointMax: v }),
 }));
 
-/* ───────────── dev helper ───────────── */
-if (typeof window !== "undefined") {
-  (window as any).uiStore = useUI;
-  console.info("%cuiStore → window.uiStore", "color:#22c55e;font-weight:bold;");
-}
-
+/* dev helper ---------------------------------------------------- */
+if (typeof window !== "undefined") (window as any).uiStore = useUI;
 export default useUI;
