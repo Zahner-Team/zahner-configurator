@@ -13,6 +13,7 @@ import useUI from "./store/useUI";
 import Wall from "./components/Wall";
 import HUD from "./components/HUD";
 import PanelPalette from "./components/PanelPalette";
+import CombineToolbar from "./components/CombineToolbar"; // NEW
 
 export default function App() {
   const ui = useUI();                       // NEW  ← keep the whole store
@@ -106,6 +107,7 @@ export default function App() {
       </Canvas>
 
       <PanelPalette /> {/* NEW  ← panel palette for drag-and-drop */}
+      <CombineToolbar />        {/* NEW */}
 
       <div className="hud-bar">
         <HUD />

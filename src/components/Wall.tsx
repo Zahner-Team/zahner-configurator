@@ -118,6 +118,7 @@ export default function Wall({ wall }: { wall: WallState }) {
           return (
             <Panel
               key={b.id}
+              id={b.id}                    
               faceSize={{ w: wFace, h: hFace }}
               wallSize={[wall.width, wall.height]}
               position={[

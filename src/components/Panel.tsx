@@ -10,11 +10,13 @@ import {
   LinearMipMapLinearFilter,
 } from "three";
 import { useThree } from "@react-three/fiber";
-import { useTexture } from "@react-three/drei";
 import useUI from "../store/useUI";
 import type { PanelSize } from "../store/useUI";
 
+import { useTexture, Edges } from "@react-three/drei";   // ← Edges here
+
 interface PanelProps {
+  id: string;                   // ← NEW
   faceSize: PanelSize;
   wallSize: [number, number];
   position: [number, number, number];
@@ -24,6 +26,7 @@ interface PanelProps {
 }
 
 export default function Panel({
+  id, 
   faceSize: { w: faceW, h: faceH },
   wallSize: [wallW, wallH],
   position,
@@ -111,13 +114,26 @@ export default function Panel({
 
   const Z_FLANGE = -returnLeg / 2; // tuck behind the face
 
-  /* ------------------------------------------------------------------ render */
-  return (
-    <group position={position}>
-      <mesh key="face" geometry={faceGeo} material={faceMat} />
+  /* ---------------- selection ---------------- */
+  const { selectedIds, toggleSelect } = useUI();
+  const selected = selectedIds.includes(id);
 
+  const handleSelect = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    toggleSelect(id, e.shiftKey || e.metaKey);
+  };
+
+
+
+
+  /* ---------------- render ---------------- */
+  return (
+    <group position={position} onPointerDown={handleSelect}>
+      <mesh geometry={faceGeo} material={faceMat} />
+
+      {/* flanges (unchanged) */}
       {/* top / bottom */}
-      {(["top", "bottom"] as const).map(dir => (
+      {(["top", "bottom"] as const).map((dir) => (
         <mesh
           key={`flange-h-${dir}`}
           geometry={flangeGeoH}
@@ -126,9 +142,8 @@ export default function Panel({
           rotation={[Math.PI / 2, 0, 0]}
         />
       ))}
-
       {/* left / right */}
-      {(["left", "right"] as const).map(dir => (
+      {(["left", "right"] as const).map((dir) => (
         <mesh
           key={`flange-v-${dir}`}
           geometry={flangeGeoV}
@@ -137,6 +152,9 @@ export default function Panel({
           rotation={[0, dir === "left" ? Math.PI / 2 : -Math.PI / 2, 0]}
         />
       ))}
+
+      {/* green outline when selected */}
+      {selected && <Edges scale={1.03} color="#10b981" />}
     </group>
   );
 }
