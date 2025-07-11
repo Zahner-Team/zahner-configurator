@@ -1,0 +1,3 @@
+.panel-palette      { position: absolute; top: 1rem; right: 1rem; display: flex; flex-direction: column; gap: .5rem; }
+.palette-item       { padding:.4rem .8rem; background:#1e293b; color:#fff; border:none; border-radius:.25rem; cursor:grab; }
+.palette-item:active{ cursor:grabbing; opacity:.7; }

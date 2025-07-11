@@ -82,8 +82,6 @@ export default function HUD() {
           onChange: debouncedSetter(() => ui.jointMax, ui.setJointMax),
         },
 
-        /* TOGGLE EDITOR */
-        "Edit grid": { value: ui.editLayout, onChange: ui.setEditLayout },
       },
       { collapsed: true }
     ),

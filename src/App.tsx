@@ -12,6 +12,7 @@ import {
 import useUI from "./store/useUI";
 import Wall from "./components/Wall";
 import HUD from "./components/HUD";
+import PanelPalette from "./components/PanelPalette";
 
 export default function App() {
   const ui = useUI();                       // NEW  ← keep the whole store
@@ -103,6 +104,8 @@ export default function App() {
         <OrbitControls makeDefault />
         <StatsGl />
       </Canvas>
+
+      <PanelPalette /> {/* NEW  ← panel palette for drag-and-drop */}
 
       <div className="hud-bar">
         <HUD />
