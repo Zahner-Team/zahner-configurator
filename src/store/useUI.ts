@@ -1,16 +1,18 @@
-/* eslint-disable @typescript-eslint/consistent-type-imports */
+/* src/store/useUI.ts
+   ONE authoritative Zustand store for the whole app */
+
 import { create } from "zustand";
+import { CELL_IN } from "../constants/layout";
 
-/* ───────────── literal unions ───────────── */
+/* ── literal unions ── */
 type Span = 1 | 2 | 3 | 4 | 5;
-
-/* ───────────── domain models ───────────── */
 export interface PanelSize { w: number; h: number }
 
+/* ── data models ── */
 export interface PanelBlock {
   id: string;
   origin: { col: number; row: number };
-  span  : { w: Span; h: Span };
+  span : { w: Span; h: Span };
   lockedJoints: { v: number[]; h: number[] };
 }
 
@@ -25,103 +27,127 @@ export interface DragInfo {
   cell: { col: number; row: number } | null;
 }
 
-/* ───── starter helper ───── */
-function packPanels(w: number, h: number, cell = 18): PanelBlock[] {
+/* ── helpers ── */
+const packPanels = (w: number, h: number, c = CELL_IN): PanelBlock[] => {
   const out: PanelBlock[] = [];
-  const cols = Math.floor(w / cell);
-  const rows = Math.floor(h / cell);
+  const cols = Math.floor(w / c);
+  const rows = Math.floor(h / c);
   let id = 0;
   for (let r = 0; r < rows; r += 2)
-    for (let c = 0; c < cols; c++)
+    for (let col = 0; col < cols; col++)
       out.push({
         id: `p${id++}`,
-        origin: { col: c, row: r },
+        origin: { col, row: r },
         span: { w: 1, h: 2 },
         lockedJoints: { v: [], h: [] },
       });
   return out;
-}
+};
 
-/* ───────────── Zustand store types ───────────── */
+/* uniform-gap solver identical to logic in <Wall> when no horizontals */
+const solveGap = (W: number, min: number, max: number) => {
+  let cols = Math.floor(W / CELL_IN);
+  let gap  = (W - cols * CELL_IN) / (cols + 1);
+  while ((gap < min || gap > max) && cols > 1) {
+    cols--;
+    gap = (W - cols * CELL_IN) / (cols + 1);
+  }
+  return { cols, gap };
+};
+
+/* build vGaps + xStops from wallW and joint range */
+const buildStops = (wallW: number, min: number, max: number) => {
+  const { cols, gap } = solveGap(wallW, min, max);
+  const vGaps = Array(cols + 1).fill(gap);
+  const xStops: number[] = [];
+  let pos = 0;
+  for (let i = 0; i < cols; i++) {
+    pos += vGaps[i];
+    xStops.push(pos);          // left edge of column i
+    pos += CELL_IN;
+  }
+  xStops.push(wallW);          // right edge of last column
+  return { vGaps, xStops };
+};
+
+/* ── Zustand store interface ── */
 interface Store {
-  /* wall + layout */
+  /* wall + variable gaps */
   wall: WallState;
   wallWidth: number; wallHeight: number;
+  vGaps: number[];   xStops: number[];
+  jointMin: number;  jointMax: number;
   setWall: (p: Partial<WallState>) => void;
+  setJointMin: (v: number) => void;
+  setJointMax: (v: number) => void;
+
+  /* layout blocks */
   layoutBlocks: PanelBlock[];
   setLayoutBlocks: (b: PanelBlock[]) => void;
 
-  /* drag-and-drop */
+  /* drag-drop */
   dragging: DragInfo | null;
   startDrag: (span: { w: Span; h: Span }) => void;
   updateDragCell: (cell: { col: number; row: number } | null) => void;
   cancelDrag: () => void;
   commitDrag: () => void;
 
-  /* selection / combine */
+  /* selection */
   selectedIds: string[];
   toggleSelect: (id: string, multi: boolean) => void;
   clearSelection: () => void;
   combineSelected: () => void;
 
-  /* —— UI prefs (needed by HUD/App/Wall) —— */
-  showEnvironment: boolean;
-  setShowEnvironment: (b: boolean) => void;
-  backgroundColor: string;
-  setBackgroundColor: (c: string) => void;
-  showGround: boolean;
-  setShowGround: (b: boolean) => void;
-  groundColor: string;
-  setGroundColor: (c: string) => void;
-  backgroundVariant: "dark" | "light";
-  setBackgroundVariant: (v: "dark" | "light") => void;
-  zoomAll: boolean;
-  setZoomAll: (b: boolean) => void;
+  /* UI prefs used elsewhere */
+  showEnvironment: boolean; setShowEnvironment: (b: boolean) => void;
+  backgroundColor: string;  setBackgroundColor: (c: string) => void;
+  showGround: boolean;      setShowGround: (b: boolean) => void;
+  groundColor: string;      setGroundColor: (c: string) => void;
+  backgroundVariant: "dark" | "light"; setBackgroundVariant: (v: "dark" | "light") => void;
+  zoomAll: boolean;         setZoomAll: (b: boolean) => void;
 
-  materialVariant: "weatheringSteel" | "copper";
-  setMaterialVariant: (v: "weatheringSteel" | "copper") => void;
-  perforate: boolean;
-  setPerforate: (b: boolean) => void;
+  layoutOrientation: "portrait" | "landscape"; setLayoutOrientation: (o: "portrait" | "landscape") => void;
+  materialVariant: "weatheringSteel" | "copper"; setMaterialVariant: (v: "weatheringSteel" | "copper") => void;
+  perforate: boolean; setPerforate: (b: boolean) => void;
+
+  returnLeg: number; setReturnLeg: (v: number) => void;
 
   perfoDiameterMin: number; perfoDiameterMax: number;
-  setPerfoDiameterMin: (v: number) => void;
-  setPerfoDiameterMax: (v: number) => void;
+  setPerfoDiameterMin: (v: number) => void; setPerfoDiameterMax: (v: number) => void;
 
   patternUrl: string; blur: number; invertPattern: boolean;
-  setPatternUrl: (u: string) => void;
-  setBlur: (v: number) => void;
-  setInvertPattern: (b: boolean) => void;
-
-  layoutOrientation: "portrait" | "landscape";
-  setLayoutOrientation: (o: "portrait" | "landscape") => void;
-  returnLeg: number; jointMin: number; jointMax: number;
-  setReturnLeg: (v: number) => void;
-  setJointMin: (v: number) => void;
-  setJointMax: (v: number) => void;
+  setPatternUrl: (u: string) => void; setBlur: (v: number) => void; setInvertPattern: (b: boolean) => void;
 }
 
-/* ───────────── Zustand implementation ───────────── */
+/* ── store implementation ── */
 const useUI = create<Store>((set, get) => ({
-  /* wall -------------------------------------------------------- */
+  /* wall defaults */
+  jointMin: 0.25,
+  jointMax: 3,
   wall: { width: 144, height: 108, seamOffsetX: 0, seamOffsetY: 0, patternSeed: 42 },
-  wallWidth: 144,
-  wallHeight: 108,
+  wallWidth: 144, wallHeight: 108,
+  ...buildStops(144, 0.25, 3),
+
   setWall: (p) => {
     const w = Math.max(36, Math.min(288, p.width  ?? get().wallWidth));
     const h = Math.max(36, Math.min(288, p.height ?? get().wallHeight));
+    const { vGaps, xStops } = buildStops(w, get().jointMin, get().jointMax);
+
     set({
-      wallWidth: w,
-      wallHeight: h,
+      wallWidth: w, wallHeight: h,
       wall: { ...get().wall, ...p, width: w, height: h },
+      vGaps, xStops,
       layoutBlocks: packPanels(w, h),
     });
   },
+  setJointMin: (v) => { set({ jointMin: v }); get().setWall({}); },
+  setJointMax: (v) => { set({ jointMax: v }); get().setWall({}); },
 
-  /* layout ------------------------------------------------------- */
+  /* layout */
   layoutBlocks: packPanels(144, 108),
   setLayoutBlocks: (b) => set({ layoutBlocks: b }),
 
-  /* drag-and-drop ----------------------------------------------- */
+  /* drag */
   dragging: null,
   startDrag: (span) => set({ dragging: { span, cell: null } }),
   updateDragCell: (cell) =>
@@ -129,120 +155,55 @@ const useUI = create<Store>((set, get) => ({
   cancelDrag: () => set({ dragging: null }),
 
   commitDrag: () => {
-    const d = get().dragging;
-    if (!d?.cell) return set({ dragging: null });
+    const d = get().dragging; if (!d?.cell) return set({ dragging: null });
+    const { col, row } = d.cell, { w, h } = d.span;
 
-    const { col, row } = d.cell;
-    const { w, h }     = d.span;
-    const x1 = col + w;
-    const y1 = row + h;
-
-    /* intersecting blocks */
-    const intersecting = get().layoutBlocks.filter((b) => {
-      const bx1 = b.origin.col + b.span.w;
-      const by1 = b.origin.row + b.span.h;
-      return !(x1 <= b.origin.col || col >= bx1 || y1 <= b.origin.row || row >= by1);
+    const survivors = get().layoutBlocks.filter((b) => {
+      const bx0 = b.origin.col, by0 = b.origin.row,
+        bx1 = bx0 + b.span.w - 1, by1 = by0 + b.span.h - 1;
+      return bx1 < col || bx0 > col + w - 1 || by1 < row || by0 > row + h - 1;
     });
+    survivors.push({ id: crypto.randomUUID(), origin: { col, row }, span: { w, h }, lockedJoints: { v: [], h: [] } });
 
-    const survivors = intersecting.filter((b) =>
-      !(b.origin.col >= col && b.origin.row >= row &&
-        b.origin.col + b.span.w <= x1 && b.origin.row + b.span.h <= y1)
-    );
-
-    const newBlock: PanelBlock = {
-      id: crypto.randomUUID(),
-      origin: { col, row },
-      span : { w, h },
-      lockedJoints: { v: [], h: [] },
-    };
-
-    set((s) => ({
-      dragging: null,
-      layoutBlocks: [
-        ...s.layoutBlocks.filter((b) => !intersecting.includes(b)),
-        ...survivors,
-        newBlock,
-      ],
-    }));
+    set({ dragging: null, layoutBlocks: survivors });
   },
 
-  /* selection / combine ----------------------------------------- */
+  /* selection */
   selectedIds: [],
   toggleSelect: (id, multi) =>
-    set((s) => {
-      const base = multi ? [...s.selectedIds] : [];
-      return { selectedIds: base.includes(id) ? base.filter((x) => x !== id) : [...base, id] };
-    }),
+    set((s) => ({
+      selectedIds: multi
+        ? s.selectedIds.includes(id) ? s.selectedIds : [...s.selectedIds, id]
+        : s.selectedIds.includes(id) ? [] : [id],
+    })),
   clearSelection: () => set({ selectedIds: [] }),
+  combineSelected: () => {},
 
-  combineSelected: () => {
-    const { selectedIds, layoutBlocks } = get();
-    if (selectedIds.length < 2) return;
-    /* simple vertical combine of same-col 1-wide blocks */
-    const blocks = layoutBlocks.filter((b) => selectedIds.includes(b.id));
-    const col = blocks[0].origin.col;
-    const sameCol1Wide = blocks.every((b) => b.origin.col === col && b.span.w === 1);
-    if (!sameCol1Wide) return;
-    const rows = blocks.map((b) => b.origin.row).sort((a, b) => a - b);
-    const contiguous = rows.every((r, i) => i === 0 || r === rows[i - 1] + 2);
-    if (!contiguous) return;
-    const totalH = rows.length * blocks[0].span.h as Span;
-    const newBlock: PanelBlock = {
-      id: crypto.randomUUID(),
-      origin: { col, row: rows[0] },
-      span: { w: 1, h: totalH },
-      lockedJoints: { v: [], h: [] },
-    };
-    set({
-      layoutBlocks: [
-        ...layoutBlocks.filter((b) => !selectedIds.includes(b.id)),
-        newBlock,
-      ],
-      selectedIds: [newBlock.id],
-    });
-  },
+  /* UI prefs */
+  showEnvironment: true, setShowEnvironment: (b) => set({ showEnvironment: b }),
+  backgroundColor: "#ffffff", setBackgroundColor: (c) => set({ backgroundColor: c }),
+  showGround: true, setShowGround: (b) => set({ showGround: b }),
+  groundColor: "#dddddd", setGroundColor: (c) => set({ groundColor: c }),
+  backgroundVariant: "light", setBackgroundVariant: (v) => set({ backgroundVariant: v }),
+  zoomAll: false, setZoomAll: (b) => set({ zoomAll: b }),
 
-  /* UI prefs (default values + setters) ------------------------- */
-  showEnvironment: true,
-  setShowEnvironment: (b) => set({ showEnvironment: b }),
-  backgroundColor: "#ffffff",
-  setBackgroundColor: (c) => set({ backgroundColor: c }),
-  showGround: true,
-  setShowGround: (b) => set({ showGround: b }),
-  groundColor: "#dddddd",
-  setGroundColor: (c) => set({ groundColor: c }),
-  backgroundVariant: "light",
-  setBackgroundVariant: (v) => set({ backgroundVariant: v }),
-  zoomAll: false,
-  setZoomAll: (b) => set({ zoomAll: b }),
+  layoutOrientation: "portrait", setLayoutOrientation: (o) => set({ layoutOrientation: o }),
+  materialVariant: "weatheringSteel", setMaterialVariant: (v) => set({ materialVariant: v }),
+  perforate: false, setPerforate: (b) => set({ perforate: b }),
 
-  materialVariant: "weatheringSteel",
-  setMaterialVariant: (v) => set({ materialVariant: v }),
-  perforate: false,
-  setPerforate: (b) => set({ perforate: b }),
+  returnLeg: 2, setReturnLeg: (v) => set({ returnLeg: v }),
 
-  perfoDiameterMin: 0.0625,
-  perfoDiameterMax: 0.5,
+  perfoDiameterMin: 0.0625, perfoDiameterMax: 0.5,
   setPerfoDiameterMin: (v) => set({ perfoDiameterMin: v }),
   setPerfoDiameterMax: (v) => set({ perfoDiameterMax: v }),
 
-  patternUrl: "",
-  blur: 0,
-  invertPattern: false,
+  patternUrl: "", blur: 0, invertPattern: false,
   setPatternUrl: (u) => set({ patternUrl: u }),
   setBlur: (v) => set({ blur: v }),
   setInvertPattern: (b) => set({ invertPattern: b }),
-
-  layoutOrientation: "portrait",
-  setLayoutOrientation: (o) => set({ layoutOrientation: o }),
-  returnLeg: 2,
-  setReturnLeg: (v) => set({ returnLeg: v }),
-  jointMin: 0.25,
-  setJointMin: (v) => set({ jointMin: v }),
-  jointMax: 3,
-  setJointMax: (v) => set({ jointMax: v }),
 }));
 
-/* dev helper ---------------------------------------------------- */
+/* expose for console tinkering */
 if (typeof window !== "undefined") (window as any).uiStore = useUI;
+
 export default useUI;

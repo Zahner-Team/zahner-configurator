@@ -1,4 +1,3 @@
-// src/components/PanelDragController.tsx
 import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
@@ -16,81 +15,90 @@ interface Props {
 
 export default function PanelDragController({ wallRef, wallW, wallH }: Props) {
   const { camera, gl } = useThree();
-  const dragging = useUI((state) => state.dragging);
+  const dragging = useUI((s) => s.dragging);
 
   useEffect(() => {
     if (!dragging) return;
 
-    console.debug("[PDC] 🎉 drag started", dragging);
-    const span = dragging.span;
-    const raycaster = new THREE.Raycaster();
+    const { span } = dragging;
+    const isSingle = span.w === 1 && span.h === 1;
+
+    const pitchY = CELL_IN + H_JOINT_IN;
+    const { xStops } = useUI.getState();           // live cumulative X stops
+    const maxCols = xStops.length - 1;
+    const maxRows = Math.floor(wallH / pitchY);
+
+    const ray = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    const hit = new THREE.Vector3();
     const plane = new THREE.Plane();
 
-    // set up the drag plane to match the wall
     if (wallRef.current) {
-      const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(
-        wallRef.current.quaternion
-      );
-      const point = wallRef.current.getWorldPosition(new THREE.Vector3());
-      plane.setFromNormalAndCoplanarPoint(normal, point);
+      const n = new THREE.Vector3(0, 0, 1).applyQuaternion(wallRef.current.quaternion);
+      const p = wallRef.current.getWorldPosition(new THREE.Vector3());
+      plane.setFromNormalAndCoplanarPoint(n, p);
     } else {
       plane.set(new THREE.Vector3(0, 0, 1), 0);
     }
 
-    // pointer move → world hit → local cell
-    const onMove = (e: PointerEvent) => {
-      const rect = gl.domElement.getBoundingClientRect();
-      const ndc = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
+    const pointerToCell = (e: PointerEvent) => {
+      const { left, top, width, height } = gl.domElement.getBoundingClientRect();
+      ndc.set(
+        ((e.clientX - left) / width) * 2 - 1,
+        -((e.clientY - top) / height) * 2 + 1
       );
-      raycaster.setFromCamera(ndc, camera);
+      ray.setFromCamera(ndc, camera);
 
-      const hit = new THREE.Vector3();
-      raycaster.ray.intersectPlane(plane, hit);
-      if (!wallRef.current) return;
-
+      if (!ray.ray.intersectPlane(plane, hit) || !wallRef.current) return null;
       const local = wallRef.current.worldToLocal(hit);
-      const col = Math.floor((local.x + wallW / 2) / CELL_IN);
-      const row = Math.floor(
-        (wallH / 2 - local.y) / (CELL_IN + H_JOINT_IN)
-      );
-      const maxCols = Math.floor(wallW / CELL_IN);
-      const maxRows = Math.floor(wallH / CELL_IN);
+
+      /* —— column from cumulative xStops —— */
+      const localX = local.x + wallW / 2;
+      let col = -1;
+      for (let i = 0; i < xStops.length - 1; i++) {
+        if (localX >= xStops[i] && localX < xStops[i + 1]) {
+          col = i;
+          break;
+        }
+      }
+
+      const row = Math.floor((wallH / 2 - local.y) / pitchY);
+
       const fits =
-        col >= 0 && col < maxCols && row >= 0 && row + span.h <= maxRows;
+        !isSingle &&
+        col >= 0 &&
+        row >= 0 &&
+        col + span.w <= maxCols &&
+        row + span.h <= maxRows;
 
-      useUI.getState().updateDragCell(fits ? { col, row } : null);
-      console.debug("[PDC] cell now ▶", useUI.getState().dragging?.cell);
+      return fits ? { col, row } : null;
     };
 
+    const onMove = (e: PointerEvent) => {
+      useUI.getState().updateDragCell(pointerToCell(e));
+    };
     const onUp = () => {
-      console.debug("[PDC] onUp ▶ commitDrag");
-      useUI.getState().commitDrag();
-      removeListeners();
+      if (isSingle) useUI.getState().cancelDrag();
+      else useUI.getState().commitDrag();
+      detach();
     };
-
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        console.debug("[PDC] onKey ▶ cancelDrag");
         useUI.getState().cancelDrag();
-        removeListeners();
+        detach();
       }
     };
-
-    const removeListeners = () => {
-      console.debug("[PDC] cleanup ▶ removing listeners");
+    const detach = () => {
       window.removeEventListener("pointermove", onMove, true);
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("keydown", onKey);
     };
 
-    console.debug("[PDC] adding window listeners");
     window.addEventListener("pointermove", onMove, { capture: true });
     window.addEventListener("pointerup", onUp, { capture: true, once: true });
     window.addEventListener("keydown", onKey);
 
-    return removeListeners;
+    return detach;
   }, [dragging, camera, gl, wallRef, wallW, wallH]);
 
   return null;
