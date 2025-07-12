@@ -5,7 +5,6 @@ import {
   Environment,
   OrbitControls,
   StatsGl,
-  Sky,
   Bounds,
   useBounds,
 } from "@react-three/drei";

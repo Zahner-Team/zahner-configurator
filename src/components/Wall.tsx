@@ -78,16 +78,13 @@ export default function Wall() {
   /* ------------------------------------------------ layout helpers */
   const horizontalExists = ui.layoutBlocks.some((b) => b.span.w > b.span.h);
 
-  const { cols, vJoint } = useMemo(() => {
+  const {  vJoint } = useMemo(() => {
     const MIN = 0.25, MAX = 3;
     if (horizontalExists) {
       /* lock gap = 0.25 and solve cols */
       const gap = 0.25;
-      const c = Math.max(
-        1,
-        Math.floor((wall.width - gap) / (CELL + gap))
-      );
-      return { cols: c, vJoint: gap };
+      
+      return {  vJoint: gap };
     }
     /* try max columns then reduce until gap ≤ MAX and ≥ MIN */
     let c = Math.floor(wall.width / CELL);
