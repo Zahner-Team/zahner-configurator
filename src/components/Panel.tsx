@@ -15,6 +15,9 @@ import type { PanelSize } from "../store/useUI";
 
 import { useTexture, Edges } from "@react-three/drei";   // ← Edges here
 
+import { assetUrl } from "../utils/assetUrl";
+
+
 interface PanelProps {
   id: string;                   // ← NEW
   faceSize: PanelSize;
@@ -36,15 +39,19 @@ export default function Panel({
 }: PanelProps) {
   /* ------------------------------------------------------------------ textures */
   const { materialVariant } = useUI();
-  const texPath = `/textures/${materialVariant}/`;
+  // const texPath = `/textures/${materialVariant}/`;
+// const texPath = assetUrl(`textures/${materialVariant}/`);
+const texPath = `textures/${materialVariant}/`;
+console.log("texPath", texPath); // Debugging line to check the texture path
+
   const isCu = materialVariant === "copper";
 
   const [map, normalMap, roughnessMap, metalnessMap, aoMap] = useTexture([
-    `${texPath}${isCu ? "Copper_PBR_BaseColor.jpg" : "Steel_Weathering_BaseColor.png"}`,
-    `${texPath}${isCu ? "Copper_PBR_Normal.jpg"    : "Steel_Weathering_Normal.jpg"}`,
-    `${texPath}${isCu ? "Copper_PBR_Roughness.jpg" : "Steel_Weathering_Roughness.jpg"}`,
-    `${texPath}${isCu ? "Copper_PBR_Metalness.jpg" : "Steel_Weathering_Metalness.jpg"}`,
-    `${texPath}${isCu ? "Copper_PBR_AO.jpg"        : "Steel_Weathering_AO.jpg"}`,
+    assetUrl(`${texPath}${isCu ? "Copper_PBR_BaseColor.jpg" : "Steel_Weathering_BaseColor.png"}`),
+    assetUrl(`${texPath}${isCu ? "Copper_PBR_Normal.jpg"    : "Steel_Weathering_Normal.jpg"}`),
+    assetUrl(`${texPath}${isCu ? "Copper_PBR_Roughness.jpg" : "Steel_Weathering_Roughness.jpg"}`),
+    assetUrl(`${texPath}${isCu ? "Copper_PBR_Metalness.jpg" : "Steel_Weathering_Metalness.jpg"}`),
+    assetUrl(`${texPath}${isCu ? "Copper_PBR_AO.jpg"        : "Steel_Weathering_AO.jpg"}`),
   ]);
   map.colorSpace = SRGBColorSpace;
 
